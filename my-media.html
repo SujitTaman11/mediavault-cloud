@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MediaVault — My Media</title>
+
+  <meta name="description" content="View, search, edit, and manage your uploaded media in MediaVault." />
+  <meta name="keywords" content="MediaVault, my media, media manager, uploaded files, gallery, portfolio" />
+  <meta name="author" content="Sujit Tamang" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0b0c10" />
+
+  <meta property="og:title" content="MediaVault — My Media" />
+  <meta property="og:description" content="Manage your uploaded media files in MediaVault." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="MediaVault" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="MediaVault — My Media" />
+  <meta name="twitter:description" content="Manage your uploaded media files in MediaVault." />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header id="appNav"></header>
+
+  <main class="container">
+    <div class="card pad">
+      <h1>My Media</h1>
+      <p class="muted">Manage your uploads. Edit or delete anytime.</p>
+
+      <div class="hr"></div>
+
+      <div class="row">
+        <div class="field">
+          <label>Search</label>
+          <input id="q" class="input" type="search" placeholder="Search my uploads…" />
+        </div>
+
+        <div class="field" style="max-width:220px">
+          <label>Status</label>
+          <select id="status">
+            <option value="all">All</option>
+            <option value="Uploaded">Uploaded</option>
+            <option value="Processing">Processing</option>
+            <option value="Failed">Failed</option>
+          </select>
+        </div>
+
+        <div class="field" style="max-width:220px">
+          <label>Sort</label>
+          <select id="sort">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="views">Most viewed</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:12px"></div>
+
+    <div id="grid" class="grid"></div>
+
+    <div class="footer">
+      <div class="row" style="justify-content:space-between">
+        <div>© <span id="year"></span> MediaVault</div>
+        <div class="row">
+          <a href="#">About</a>
+          <a href="#">Contact</a>
+          <a href="#">Terms</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    MS.mountNav("mine");
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    const grid = document.getElementById("grid");
+    const state = { q:"", sort:"newest", type:"all", onlyMine:true, tag:"", status:"all" };
+
+    function simpleCard(item){
+      const thumb = (() => {
+        if(item.type === "image" && item.thumbDataUrl){
+          return `<img alt="${MS.escapeHtml(item.title)}" src="${item.thumbDataUrl}" loading="lazy" />`;
+        }
+        return `<div class="small" style="padding:10px;color:var(--muted)">No thumbnail</div>`;
+      })();
+
+      const statusClass =
+        item.status === "Uploaded" ? "ok" :
+        item.status === "Processing" ? "warn" :
+        item.status === "Failed" ? "bad" : "";
+
+      return `
+        <div class="simpleItem" data-id="${MS.escapeHtml(item.id)}">
+          <div class="simpleThumb">
+            <span class="badge ${statusClass}" style="position:absolute;top:10px;right:10px">${MS.escapeHtml(item.status||"")}</span>
+            <span class="badge" style="position:absolute;top:10px;left:10px">${item.type === "video" ? "Video" : "Image"}</span>
+            ${thumb}
+          </div>
+
+          <div class="simpleBody">
+            <div class="simpleTitle">${MS.escapeHtml(item.title)}</div>
+            <div class="simpleMeta">
+              ${MS.escapeHtml(MS.niceDate(item.uploadDate))} • Views: ${item.views || 0} • ${MS.escapeHtml(item.visibility || "Public")}
+            </div>
+
+            <div class="simpleActions">
+              <a class="btn" href="details.html?id=${encodeURIComponent(item.id)}">View</a>
+              <a class="btn" href="edit.html?id=${encodeURIComponent(item.id)}">Edit</a>
+              <button class="btn danger" type="button" data-del="${MS.escapeHtml(item.id)}">Delete</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function refresh(){
+  MS.renderSkeletonGrid(grid, 8);
+
+  try {
+    const user = MS.getUser().username;
+    let list = await apiGetMedia();
+
+    list = list.filter(x => x.owner === user);
+
+    if(state.status !== "all"){
+      list = list.filter(x => x.status === state.status);
+    }
+
+    list = MS.applyFilters(list, state);
+
+    if(!list.length){
+      grid.innerHTML = `
+        <div class="card pad" style="grid-column:1/-1">
+          <h2>No uploads yet</h2>
+          <p class="muted">Upload your first file to see it here.</p>
+          <div style="height:10px"></div>
+          <a class="btn primary" href="upload.html">Upload</a>
+        </div>
+      `;
+      return;
+    }
+
+    grid.innerHTML = list.map(simpleCard).join("");
+
+    grid.querySelectorAll("[data-del]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-del");
+        if(!confirm("Delete this item?")) return;
+
+        try {
+          await apiDeleteMedia(id);
+          refresh();
+        } catch (err) {
+          console.error(err);
+          alert("Failed to delete item.");
+        }
+      });
+    });
+
+  } catch (err) {
+    console.error(err);
+    grid.innerHTML = `
+      <div class="card pad" style="grid-column:1/-1">
+        <h2>Failed to load media</h2>
+        <p class="muted">Please make sure the backend server is running.</p>
+      </div>
+    `;
+  }
+}
+    document.getElementById("q").addEventListener("input", (e)=>{ state.q = e.target.value; refresh(); });
+    document.getElementById("status").addEventListener("change", (e)=>{ state.status = e.target.value; refresh(); });
+    document.getElementById("sort").addEventListener("change", (e)=>{ state.sort = e.target.value; refresh(); });
+
+    refresh();
+  </script>
+
+  <style>
+    /* Simple card layout for My Media (only applies to this page) */
+    .simpleItem{
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.03);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height: 260px;
+    }
+    .simpleThumb{
+      position:relative;
+      height:170px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.18);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .simpleThumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .simpleBody{padding:12px}
+    .simpleTitle{font-weight:800;font-size:14px}
+    .simpleMeta{margin-top:6px;color:var(--muted);font-size:12px;line-height:1.3}
+    .simpleActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .simpleActions .btn{padding:10px 12px}
+  </style>
+</body>
+</html>

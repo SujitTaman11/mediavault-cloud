@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MediaVault — Details</title>
+
+  <meta name="description" content="View media details, preview images, and check metadata in MediaVault." />
+  <meta name="keywords" content="MediaVault, media details, image preview, video preview, metadata" />
+  <meta name="author" content="Sujit Tamang" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0b0c10" />
+
+  <meta property="og:title" content="MediaVault — Media Details" />
+  <meta property="og:description" content="Preview and view detailed information about media in MediaVault." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="MediaVault" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="MediaVault — Media Details" />
+  <meta name="twitter:description" content="Preview and view detailed information about media in MediaVault." />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header id="appNav"></header>
+
+  <main class="container">
+    <div id="wrap" class="card pad"></div>
+
+    <div class="footer">
+      <div class="row" style="justify-content:space-between">
+        <div>© <span id="year"></span> MediaVault</div>
+        <div class="row">
+          <a href="#">About</a>
+          <a href="#">Contact</a>
+          <a href="#">Terms</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    MS.mountNav("");
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    const wrap = document.getElementById("wrap");
+    const id = MS.getQueryParam("id");
+
+    function renderNotFound(){
+      wrap.innerHTML = `
+        <h1>Not found</h1>
+        <p class="muted">This media item does not exist.</p>
+        <div style="height:10px"></div>
+        <a class="btn primary" href="index.html">Go Home</a>
+      `;
+    }
+
+    async function render(){
+  if(!id) return renderNotFound();
+
+  let item;
+  try {
+    item = await apiGetMediaById(id);
+  } catch (err) {
+    console.error(err);
+    return renderNotFound();
+  }
+
+  if(!item) return renderNotFound();
+
+  const user = MS.getUser().username;
+  const isOwner = item.owner === user;
+
+  const mediaType = item.type === "video" ? "Video" : "Image";
+
+  const preview = item.thumbDataUrl
+    ? `<img src="${item.thumbDataUrl}" 
+          style="width:100%;max-height:520px;object-fit:contain;border-radius:16px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.18)" />`
+    : `<div class="drop">No preview available.</div>`;
+
+  wrap.innerHTML = `
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div>
+        <h1 style="margin-bottom:6px">${MS.escapeHtml(item.title)}</h1>
+        <div class="row">
+          <span class="badge">${mediaType}</span>
+          <span class="badge">${MS.escapeHtml(item.visibility || "Public")}</span>
+          <span class="badge">Views: ${item.views || 0}</span>
+        </div>
+        <div class="submeta" style="margin-top:8px">
+          by <b>${MS.escapeHtml(item.owner)}</b> • ${MS.escapeHtml(MS.niceDate(item.uploadDate))}
+        </div>
+      </div>
+
+      <div class="row">
+        ${isOwner ? `<a class="btn" href="edit.html?id=${encodeURIComponent(item.id)}">Edit</a>` : ""}
+        ${isOwner ? `<button class="btn danger" id="delBtn" type="button">Delete</button>` : ""}
+        <a class="btn primary" href="upload.html">+ Upload Another</a>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="row" style="align-items:flex-start">
+      <div style="flex:2; min-width:260px">
+        ${preview}
+      </div>
+
+      <div class="card pad" style="flex:1; min-width:260px; background: rgba(255,255,255,.02)">
+        <h2>Metadata</h2>
+        <div class="stack">
+          <div>
+            <label>Description</label>
+            <div class="small" style="margin-top:6px">
+              ${MS.escapeHtml(item.description || "—")}
+            </div>
+          </div>
+          <div>
+            <label>Tags</label>
+            <div style="margin-top:8px">
+              ${(item.tags||[]).length
+                ? item.tags.map(t => `<span class="chip">${MS.escapeHtml(t)}</span>`).join("")
+                : `<span class="muted">No tags</span>`}
+            </div>
+          </div>
+        </div>
+        <div class="hr"></div>
+        <div class="small">
+          <b>Owner:</b> ${MS.escapeHtml(item.owner)}<br/>
+          <b>Uploaded:</b> ${MS.escapeHtml(MS.niceDate(item.uploadDate))}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const delBtn = document.getElementById("delBtn");
+  if(delBtn){
+    delBtn.onclick = async () => {
+      if(!confirm("Delete this item?")) return;
+
+      try {
+        await apiDeleteMedia(item.id);
+        location.href = "my-media.html";
+      } catch (err) {
+        console.error(err);
+        alert("Failed to delete item.");
+      }
+    };
+  }
+}
+
+    render();
+  </script>
+</body>
+</html>

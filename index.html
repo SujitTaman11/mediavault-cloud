@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MediaVault — Home</title>
+
+  <meta name="description" content="MediaVault is a multimedia sharing website where users can explore, upload, and manage images and videos." />
+  <meta name="keywords" content="MediaVault, media sharing, image upload, video upload, gallery, portfolio" />
+  <meta name="author" content="Sujit Tamang" />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0b0c10" />
+
+  <meta property="og:title" content="MediaVault — Home" />
+  <meta property="og:description" content="Explore trending media and manage your own uploads on MediaVault." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="MediaVault" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="MediaVault — Home" />
+  <meta name="twitter:description" content="Explore trending media and manage your own uploads on MediaVault." />
+
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* small extras for a more Getty-like masonry feel (still simple grid) */
+    .heroTitle{font-size:32px;margin:0 0 8px}
+    .heroSub{margin:0;color:var(--muted)}
+    .toolbar{margin-top:14px}
+    .gridTall .thumb{height:220px}
+  </style>
+</head>
+<body>
+  <header id="appNav"></header>
+
+  <main class="container">
+    <div class="card pad">
+      <h1 class="heroTitle">Explore</h1>
+      <p class="heroSub">Browse trending photos and your uploads. Search to narrow down.</p>
+
+      <div class="toolbar row" style="align-items:flex-end">
+        <div class="field" style="min-width:260px; flex:2">
+          <label>Search</label>
+          <input id="q" class="input" type="search" placeholder="Search title, tags, uploader…" />
+        </div>
+
+        <div class="field" style="max-width:220px">
+          <label>Type</label>
+          <select id="type">
+            <option value="all">All</option>
+            <option value="image">Images</option>
+            <option value="video">Videos</option>
+          </select>
+        </div>
+
+        <div class="field" style="max-width:220px">
+          <label>Sort</label>
+          <select id="sort">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="views">Most viewed</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:14px"></div>
+
+    <!-- Trending / Random images (Getty-like feed) -->
+    <div class="row" style="justify-content:space-between;align-items:center;margin:6px 0 10px">
+      <div class="muted">Trending</div>
+      <button class="btn" id="refreshTrending" type="button">Refresh</button>
+    </div>
+
+    <div id="trendingGrid" class="grid gridTall"></div>
+
+    <div style="height:18px"></div>
+
+    <!-- Your uploads section -->
+    <div class="row" style="justify-content:space-between;align-items:center;margin:6px 0 10px">
+      <div class="muted">Your uploads</div>
+      <a class="btn primary" href="upload.html">Upload</a>
+    </div>
+
+    <div id="myGrid" class="grid"></div>
+
+    <div class="footer">
+      <div class="row" style="justify-content:space-between">
+        <div>© <span id="year"></span> MediaVault</div>
+        <div class="row">
+          <a href="#">About</a>
+          <a href="#">Contact</a>
+          <a href="#">Terms</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    MS.mountNav("home");
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    const trendingGrid = document.getElementById("trendingGrid");
+    const myGrid = document.getElementById("myGrid");
+
+    const state = { q:"", type:"all", sort:"newest" };
+
+    // --- Trending random photos (no API key; uses picsum.photos) ---
+    function randomPicsumUrl(seed){
+      // 640x420 thumb
+      return `https://picsum.photos/seed/${encodeURIComponent(seed)}/640/420`;
+    }
+    function randomAuthor(seed){
+      const names = ["Alex Morgan","Sam Lee","Taylor Kim","Jordan Patel","Casey Chen","Riley Singh","Jamie Brown"];
+      return names[Math.abs(hash(seed)) % names.length];
+    }
+    function hash(s){
+      let h = 0;
+      for(let i=0;i<s.length;i++) h = ((h<<5)-h) + s.charCodeAt(i) | 0;
+      return h;
+    }
+
+    function renderTrending(count=16){
+      trendingGrid.innerHTML = "";
+      for(let i=0;i<count;i++){
+        const seed = `${Date.now()}-${i}-${Math.random().toString(16).slice(2)}`;
+        const src = randomPicsumUrl(seed);
+        const title = ["Business","Lifestyle","Travel","Nature","City","Portrait","Food","Tech"][i % 8] + " shot";
+
+        const card = document.createElement("a");
+        card.className = "item";
+        card.href = `details.html?external=1&src=${encodeURIComponent(src)}&title=${encodeURIComponent(title)}&owner=${encodeURIComponent(randomAuthor(seed))}`;
+        card.innerHTML = `
+          <div class="thumb">
+            <span class="badge typebadge">Image</span>
+            <span class="badge ok statusbadge">Trending</span>
+            <img alt="${MS.escapeHtml(title)}" src="${src}" loading="lazy" />
+          </div>
+          <div class="meta">
+            <div class="titleline">
+              <div class="title">${MS.escapeHtml(title)}</div>
+              <span class="badge">Public</span>
+            </div>
+            <div class="submeta">
+              by <b>${MS.escapeHtml(randomAuthor(seed))}</b> • ${new Date().toLocaleDateString()}
+            </div>
+            <div class="chips" style="margin-top:10px">
+              <span class="chip">trending</span>
+              <span class="chip">photo</span>
+            </div>
+          </div>
+        `;
+        trendingGrid.appendChild(card);
+      }
+    }
+
+    async function renderMine(){
+  MS.renderSkeletonGrid(myGrid, 8);
+
+  try {
+    const user = MS.getUser().username;
+    let list = await apiGetMedia();
+    list = list.filter(x => x.owner === user);
+
+    list = MS.applyFilters(list, {
+      q: state.q,
+      type: state.type,
+      sort: state.sort,
+      onlyMine: true,
+      tag: ""
+    });
+
+    if(!list.length){
+      myGrid.innerHTML = `
+        <div class="card pad" style="grid-column:1/-1">
+          <h2>No uploads yet</h2>
+          <p class="muted">Upload your first file to see it here.</p>
+          <div style="height:10px"></div>
+          <a class="btn primary" href="upload.html">Upload</a>
+        </div>
+      `;
+      return;
+    }
+
+    myGrid.innerHTML = list.map(x => MS.renderItemCard(x)).join("");
+  } catch (err) {
+    console.error(err);
+    myGrid.innerHTML = `
+      <div class="card pad" style="grid-column:1/-1">
+        <h2>Failed to load uploads</h2>
+        <p class="muted">Please make sure the backend server is running.</p>
+      </div>
+    `;
+  }
+}
+    // Bind toolbar
+    document.getElementById("q").addEventListener("input", (e)=>{ state.q = e.target.value; renderMine(); });
+    document.getElementById("type").addEventListener("change", (e)=>{ state.type = e.target.value; renderMine(); });
+    document.getElementById("sort").addEventListener("change", (e)=>{ state.sort = e.target.value; renderMine(); });
+
+    document.getElementById("refreshTrending").onclick = () => renderTrending(16);
+
+    // init
+    renderTrending(16);
+    renderMine();
+  </script>
+</body>
+</html>

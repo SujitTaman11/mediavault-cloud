@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<button onclick="addData()">Add Test Data</button>
+
+<script>
+function addData() {
+  fetch("http://localhost:3000/media", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: Date.now().toString(),
+      title: "Test Image",
+      description: "Demo record",
+      tags: ["test"],
+      type: "image",
+      visibility: "Public",
+      owner: "demoUser",
+      uploadDate: new Date().toISOString(),
+      status: "Uploaded",
+      views: 0,
+      fileUrl: "test.jpg"
+    })
+  })
+  .then(res => res.json())
+  .then(data => alert("Saved!"));
+}
+</script>
+
+</body>
+</html>

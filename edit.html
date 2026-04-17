@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MediaVault — Edit</title>
+
+  <meta name="description" content="Edit media title, description, tags, and visibility in MediaVault." />
+  <meta name="keywords" content="MediaVault, edit media, metadata, tags, visibility, media manager" />
+  <meta name="author" content="Sujit Tamang" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0b0c10" />
+
+  <meta property="og:title" content="MediaVault — Edit" />
+  <meta property="og:description" content="Edit media information and settings in MediaVault." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="MediaVault" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="MediaVault — Edit" />
+  <meta name="twitter:description" content="Edit media information and settings in MediaVault." />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header id="appNav"></header>
+
+  <main class="container">
+    <div id="wrap" class="card pad"></div>
+
+    <div class="footer">
+      <div class="row" style="justify-content:space-between">
+        <div>© <span id="year"></span> MediaVault</div>
+        <div class="row">
+          <a href="#">About</a>
+          <a href="#">Contact</a>
+          <a href="#">Terms</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    MS.mountNav("");
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    const wrap = document.getElementById("wrap");
+    const id = MS.getQueryParam("id");
+
+    function renderNotAllowed(msg){
+      wrap.innerHTML = `
+        <h1>Edit</h1>
+        <p class="muted">${MS.escapeHtml(msg)}</p>
+        <div style="height:10px"></div>
+        <a class="btn primary" href="index.html">Go Home</a>
+      `;
+    }
+
+    async function render(){
+  if(!id) return renderNotAllowed("Missing id.");
+
+  let item;
+  try {
+    item = await apiGetMediaById(id);
+  } catch (err) {
+    console.error(err);
+    return renderNotAllowed("Item not found.");
+  }
+
+  if(!item) return renderNotAllowed("Item not found.");
+
+  const user = MS.getUser().username;
+  if(item.owner !== user) return renderNotAllowed("You can only edit your own uploads.");
+
+  wrap.innerHTML = `
+    <h1>Edit metadata</h1>
+    <p class="muted">Update title, description, tags, and visibility.</p>
+    <div class="hr"></div>
+
+    <div class="row">
+      <div class="field">
+        <label>Title <span class="warnmsg">*</span></label>
+        <input id="title" class="input" value="${MS.escapeHtml(item.title)}" />
+        <div class="err" id="titleErr"></div>
+      </div>
+      <div class="field" style="max-width:260px">
+        <label>Visibility</label>
+        <select id="visibility">
+          <option ${item.visibility==="Public"?"selected":""}>Public</option>
+          <option ${item.visibility==="Private"?"selected":""}>Private</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Description</label>
+      <textarea id="description">${MS.escapeHtml(item.description || "")}</textarea>
+    </div>
+
+    <div class="field">
+      <label>Tags (comma-separated)</label>
+      <input id="tags" class="input" value="${MS.escapeHtml(MS.tagsToString(item.tags || []))}" />
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary" id="saveBtn" type="button">Save</button>
+      <a class="btn" href="details.html?id=${encodeURIComponent(item.id)}">Cancel</a>
+      <span class="small" id="msg"></span>
+    </div>
+  `;
+
+  const titleEl = document.getElementById("title");
+  const descEl = document.getElementById("description");
+  const tagsEl = document.getElementById("tags");
+  const visEl = document.getElementById("visibility");
+  const titleErr = document.getElementById("titleErr");
+  const msg = document.getElementById("msg");
+
+  document.getElementById("saveBtn").onclick = async () => {
+    titleErr.textContent = "";
+    msg.textContent = "";
+
+    const title = titleEl.value.trim();
+    if(!title){
+      titleErr.textContent = "Title is required.";
+      return;
+    }
+
+    const patch = {
+      title,
+      description: descEl.value.trim(),
+      tags: MS.parseTags(tagsEl.value),
+      visibility: visEl.value
+    };
+
+    try {
+      await apiUpdateMedia(item.id, patch);
+      msg.className = "small okmsg";
+      msg.textContent = "Saved!";
+      setTimeout(() => location.href = `details.html?id=${encodeURIComponent(item.id)}`, 350);
+    } catch (err) {
+      console.error(err);
+      msg.className = "small err";
+      msg.textContent = "Failed to save changes.";
+    }
+  };
+}
+    render();
+  </script>
+</body>
+</html>

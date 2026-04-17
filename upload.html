@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MediaVault — Upload</title>
+
+  <meta name="description" content="Upload new images and videos to your MediaVault account." />
+  <meta name="keywords" content="MediaVault, upload media, image upload, video upload, media sharing" />
+  <meta name="author" content="Sujit Tamang" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0b0c10" />
+
+  <meta property="og:title" content="MediaVault — Upload" />
+  <meta property="og:description" content="Upload and manage media files in MediaVault." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="MediaVault" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="MediaVault — Upload" />
+  <meta name="twitter:description" content="Upload and manage media files in MediaVault." />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header id="appNav"></header>
+
+  <main class="container">
+    <div class="card pad">
+      <h1>Upload</h1>
+      <p class="muted">Allowed: <b>.jpg .png .mp4</b> • Max: <b>25MB</b> (demo)</p>
+
+      <div class="hr"></div>
+
+      <div id="drop" class="drop">
+        <h2 style="margin:0 0 6px">Drag & drop a file</h2>
+        <p class="muted" style="margin:0 0 10px">…or choose a file.</p>
+        <input id="file" type="file" accept=".jpg,.jpeg,.png,.mp4" />
+        <div style="height:10px"></div>
+        <div class="small" id="fileInfo">No file selected</div>
+      </div>
+
+      <div style="height:14px"></div>
+
+      <div class="row">
+        <div class="field">
+          <label>Title <span class="warnmsg">*</span></label>
+          <input id="title" class="input" placeholder="Required" />
+          <div class="err" id="titleErr"></div>
+        </div>
+
+        <div class="field">
+          <label>Visibility</label>
+          <select id="visibility">
+            <option>Public</option>
+            <option>Private</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Description (optional)</label>
+        <textarea id="description" placeholder="Optional…"></textarea>
+      </div>
+
+      <div class="field">
+        <label>Tags (comma-separated)</label>
+        <input id="tags" class="input" placeholder="e.g., travel, city, aerial" />
+        <div class="small">Tip: tags become clickable chips on Home.</div>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="uploadBtn" class="btn primary" type="button">Upload</button>
+        <div style="flex:1; min-width:220px">
+          <div class="progress"><div id="bar"></div></div>
+          <div id="msg" class="small" style="margin-top:6px"></div>
+        </div>
+      </div>
+
+      <div class="err" id="fileErr" style="margin-top:10px"></div>
+    </div>
+
+    <div class="footer">
+      <div class="row" style="justify-content:space-between">
+        <div>© <span id="year"></span> MediaVault</div>
+        <div class="row">
+          <a href="#">About</a>
+          <a href="#">Contact</a>
+          <a href="#">Terms</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    // ---- NAV + YEAR ----
+    MS.mountNav("upload");
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    // ---- ELEMENTS ----
+    const drop = document.getElementById("drop");
+    const fileInput = document.getElementById("file");
+    const fileInfo = document.getElementById("fileInfo");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const bar = document.getElementById("bar");
+    const msg = document.getElementById("msg");
+    const fileErr = document.getElementById("fileErr");
+    const titleErr = document.getElementById("titleErr");
+
+    let selectedFile = null;
+
+    function setError(el, text){ el.textContent = text || ""; }
+    function setMsg(text, cls){
+      msg.className = "small " + (cls || "");
+      msg.textContent = text || "";
+    }
+
+    function pickFile(f){
+      selectedFile = f || null;
+      fileErr.textContent = "";
+      if(!selectedFile){
+        fileInfo.textContent = "No file selected";
+        return;
+      }
+      fileInfo.textContent =
+        `${selectedFile.name} • ${(selectedFile.size/1024/1024).toFixed(2)} MB • ${selectedFile.type || "unknown"}`;
+    }
+
+    drop.addEventListener("dragover", (e)=>{ e.preventDefault(); drop.classList.add("dragover"); });
+    drop.addEventListener("dragleave", ()=> drop.classList.remove("dragover"));
+    drop.addEventListener("drop", (e)=>{
+      e.preventDefault();
+      drop.classList.remove("dragover");
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if(f) pickFile(f);
+    });
+
+    fileInput.addEventListener("change", (e)=> pickFile(e.target.files[0]));
+
+    async function imageToThumbDataUrl(file, maxW = 900, quality = 0.78){
+      const dataUrl = await MS.fileToDataUrl(file);
+
+      const img = new Image();
+      await new Promise((res, rej) => {
+        img.onload = res;
+        img.onerror = rej;
+        img.src = dataUrl;
+      });
+
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+
+      const ctx = canvas.getContext("2d", { alpha: false });
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, w, h);
+
+      return canvas.toDataURL("image/jpeg", quality);
+    }
+
+    uploadBtn.onclick = async () => {
+      setError(fileErr, "");
+      setError(titleErr, "");
+      setMsg("", "");
+
+      const title = document.getElementById("title").value.trim();
+      const description = document.getElementById("description").value.trim();
+      const tags = MS.parseTags(document.getElementById("tags").value);
+      const visibility = document.getElementById("visibility").value;
+
+      if(!selectedFile){
+        setError(fileErr, "Please select a file.");
+        return;
+      }
+      if(!MS.allowedType(selectedFile)){
+        setError(fileErr, "Unsupported file type. Allowed: .jpg .png .mp4");
+        return;
+      }
+      if(MS.fileTooLarge(selectedFile)){
+        setError(fileErr, "Upload too large. Max is 25MB in this demo.");
+        return;
+      }
+      if(!title){
+        setError(titleErr, "Title is required.");
+        return;
+      }
+
+      const type = selectedFile.type.startsWith("video") ? "video" : "image";
+
+      bar.style.width = "0%";
+      setMsg("Uploading…", "warnmsg");
+
+      let p = 0;
+      const timer = setInterval(()=> {
+        p = Math.min(92, p + Math.random()*14);
+        bar.style.width = p.toFixed(0) + "%";
+      }, 120);
+
+      try{
+        let thumbDataUrl = null;
+
+        if(type === "image"){
+          thumbDataUrl = await imageToThumbDataUrl(selectedFile);
+        }
+
+        clearInterval(timer);
+        bar.style.width = "100%";
+
+                const user = MS.getUser().username;
+
+        const item = {
+          id: crypto.randomUUID(),
+          title,
+          description,
+          tags,
+          type,
+          visibility,
+          owner: user,
+          uploadDate: new Date().toISOString(),
+          status: "Uploaded",
+          views: 0,
+          thumbDataUrl
+        };
+
+        await apiCreateMedia(item);
+
+        setMsg("Success! Redirecting to details…", "okmsg");
+        setTimeout(() => location.href = `details.html?id=${encodeURIComponent(item.id)}`, 400);
+            }catch(err){
+        clearInterval(timer);
+        bar.style.width = "0%";
+        console.error(err);
+        setError(fileErr, "Upload failed. Please try again.");
+        setMsg("Upload failed.", "err");
+      }
+    };
+  </script>
+</body>
+</html>
