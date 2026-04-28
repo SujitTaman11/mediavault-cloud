@@ -5,20 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>MediaVault — Profile/Login</title>
 
-  <meta name="description" content="Manage your MediaVault account and login details." />
-  <meta name="keywords" content="MediaVault, user profile, login, account settings" />
+  <meta name="description" content="Register, login, and manage your MediaVault account." />
+  <meta name="keywords" content="MediaVault, register, login, user profile, account settings" />
   <meta name="author" content="Sujit Tamang" />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="theme-color" content="#0b0c10" />
-
-  <meta property="og:title" content="MediaVault — Profile/Login" />
-  <meta property="og:description" content="Manage your MediaVault account and profile settings." />
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="MediaVault" />
-
-  <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="MediaVault — Profile/Login" />
-  <meta name="twitter:description" content="Manage your MediaVault account and profile settings." />
 
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -26,28 +17,7 @@
   <header id="appNav"></header>
 
   <main class="container">
-    <div class="card pad">
-      <h1>Profile / Login</h1>
-      <p class="muted">This demo “login” just stores a username in localStorage.</p>
-
-      <div class="hr"></div>
-
-      <div class="row">
-        <div class="field">
-          <label>Username</label>
-          <input id="username" class="input" placeholder="e.g., alex" />
-          <div class="small">Used to power “My Media” filtering and ownership checks.</div>
-        </div>
-        <div class="field" style="max-width:260px">
-          <label>Actions</label>
-          <button id="saveBtn" class="btn primary" type="button">Save</button>
-          <div style="height:8px"></div>
-          <button id="signOutBtn" class="btn danger" type="button">Sign out</button>
-        </div>
-      </div>
-
-      <div class="small" id="msg" style="margin-top:10px"></div>
-    </div>
+    <div id="profileWrap" class="card pad"></div>
 
     <div class="footer">
       <div class="row" style="justify-content:space-between">
@@ -66,31 +36,145 @@
     MS.mountNav("profile");
     document.getElementById("year").textContent = new Date().getFullYear();
 
-    const user = MS.getUser();
-    const username = document.getElementById("username");
-    const msg = document.getElementById("msg");
+    const wrap = document.getElementById("profileWrap");
 
-    username.value = user.username || "demoUser";
+    function renderProfile() {
+      const user = MS.getUser();
 
-    document.getElementById("saveBtn").onclick = () => {
-      const u = username.value.trim();
-      if(!u){
-        msg.className = "small err";
-        msg.textContent = "Username can’t be empty.";
+      if (user) {
+        wrap.innerHTML = `
+          <h1>My Profile</h1>
+          <p class="muted">You are currently logged in.</p>
+
+          <div class="hr"></div>
+
+          <div class="card pad" style="background:rgba(255,255,255,.02)">
+            <h2>${MS.escapeHtml(user.username)}</h2>
+            <p class="muted">${MS.escapeHtml(user.email)}</p>
+
+            <div style="height:12px"></div>
+
+            <a class="btn primary" href="my-media.html">Go to My Media</a>
+            <button id="signOutBtn" class="btn danger" type="button">Sign out</button>
+          </div>
+        `;
+
+        document.getElementById("signOutBtn").onclick = () => {
+          MS.signOut();
+          location.reload();
+        };
+
         return;
       }
-      MS.setUser(u);
-      msg.className = "small okmsg";
-      msg.textContent = "Saved!";
-      setTimeout(()=> location.href="index.html", 250);
-    };
 
-    document.getElementById("signOutBtn").onclick = () => {
-      MS.signOut();
-      msg.className = "small okmsg";
-      msg.textContent = "Signed out (will revert to demoUser).";
-      setTimeout(()=> location.href="index.html", 250);
-    };
+      wrap.innerHTML = `
+        <h1>Register / Login</h1>
+        <p class="muted">Create an account or login to manage your media uploads.</p>
+
+        <div class="hr"></div>
+
+        <div class="row" style="align-items:flex-start">
+          <div class="card pad" style="flex:1; min-width:280px; background:rgba(255,255,255,.02)">
+            <h2>Register</h2>
+
+            <div class="field">
+              <label>Username</label>
+              <input id="regUsername" class="input" placeholder="e.g., sujit" />
+            </div>
+
+            <div class="field">
+              <label>Email</label>
+              <input id="regEmail" class="input" type="email" placeholder="e.g., sujit@email.com" />
+            </div>
+
+            <div class="field">
+              <label>Password</label>
+              <input id="regPassword" class="input" type="password" placeholder="Create password" />
+            </div>
+
+            <button id="registerBtn" class="btn primary" type="button">Register</button>
+            <div id="registerMsg" class="small" style="margin-top:10px"></div>
+          </div>
+
+          <div class="card pad" style="flex:1; min-width:280px; background:rgba(255,255,255,.02)">
+            <h2>Login</h2>
+
+            <div class="field">
+              <label>Email</label>
+              <input id="loginEmail" class="input" type="email" placeholder="demo@mediavault.com" />
+            </div>
+
+            <div class="field">
+              <label>Password</label>
+              <input id="loginPassword" class="input" type="password" placeholder="123456" />
+            </div>
+
+            <button id="loginBtn" class="btn primary" type="button">Login</button>
+            <div id="loginMsg" class="small" style="margin-top:10px"></div>
+
+            <div class="hr"></div>
+            <p class="small muted">
+              Demo account: <b>demo@mediavault.com</b> / <b>123456</b>
+            </p>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("registerBtn").onclick = async () => {
+        const username = document.getElementById("regUsername").value.trim();
+        const email = document.getElementById("regEmail").value.trim();
+        const password = document.getElementById("regPassword").value.trim();
+        const msg = document.getElementById("registerMsg");
+
+        msg.textContent = "";
+        msg.className = "small";
+
+        if (!username || !email || !password) {
+          msg.className = "small err";
+          msg.textContent = "Please fill in all registration fields.";
+          return;
+        }
+
+        try {
+          const data = await apiRegister(username, email, password);
+          MS.setUser(data.user);
+          msg.className = "small okmsg";
+          msg.textContent = "Account created successfully.";
+          setTimeout(() => location.reload(), 500);
+        } catch (err) {
+          msg.className = "small err";
+          msg.textContent = err.message;
+        }
+      };
+
+      document.getElementById("loginBtn").onclick = async () => {
+        const email = document.getElementById("loginEmail").value.trim();
+        const password = document.getElementById("loginPassword").value.trim();
+        const msg = document.getElementById("loginMsg");
+
+        msg.textContent = "";
+        msg.className = "small";
+
+        if (!email || !password) {
+          msg.className = "small err";
+          msg.textContent = "Please enter email and password.";
+          return;
+        }
+
+        try {
+          const data = await apiLogin(email, password);
+          MS.setUser(data.user);
+          msg.className = "small okmsg";
+          msg.textContent = "Login successful.";
+          setTimeout(() => location.reload(), 500);
+        } catch (err) {
+          msg.className = "small err";
+          msg.textContent = err.message;
+        }
+      };
+    }
+
+    renderProfile();
   </script>
 </body>
 </html>

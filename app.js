@@ -1,4 +1,4 @@
-// ======= Simple “DB” in localStorage =======
+// ======= Storage keys =======
 const LS_KEYS = {
   media: "ms_media_v1",
   user: "ms_user_v1"
@@ -7,23 +7,30 @@ const LS_KEYS = {
 function nowISO(){
   return new Date().toISOString();
 }
+
 function niceDate(iso){
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
 }
+
 function uid(){
   return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
 }
+
+// ======= User session =======
 function getUser(){
   const u = JSON.parse(localStorage.getItem(LS_KEYS.user) || "null");
-  return u || { username: "demoUser" }; // default “logged-in”
+  return u || null;
 }
-function setUser(username){
-  localStorage.setItem(LS_KEYS.user, JSON.stringify({ username }));
+
+function setUser(user){
+  localStorage.setItem(LS_KEYS.user, JSON.stringify(user));
 }
+
 function signOut(){
   localStorage.removeItem(LS_KEYS.user);
 }
 
+// ======= Old localStorage media helpers kept for backup/demo =======
 function loadMedia(){
   const raw = localStorage.getItem(LS_KEYS.media);
   if(!raw){
@@ -33,12 +40,15 @@ function loadMedia(){
   }
   try { return JSON.parse(raw) || []; } catch { return []; }
 }
+
 function saveMedia(list){
   localStorage.setItem(LS_KEYS.media, JSON.stringify(list));
 }
+
 function seedMedia(){
-  // Seed items so Home isn’t empty on first run
-  const u = getUser().username;
+  const user = getUser();
+  const u = user ? user.username : "demoUser";
+
   return [
     {
       id: uid(),
@@ -72,6 +82,7 @@ function seedMedia(){
 function findById(id){
   return loadMedia().find(x => x.id === id) || null;
 }
+
 function updateById(id, patch){
   const list = loadMedia();
   const idx = list.findIndex(x => x.id === id);
@@ -80,6 +91,7 @@ function updateById(id, patch){
   saveMedia(list);
   return true;
 }
+
 function deleteById(id){
   const list = loadMedia().filter(x => x.id !== id);
   saveMedia(list);
@@ -89,6 +101,7 @@ function parseTags(str){
   if(!str) return [];
   return str.split(",").map(s => s.trim()).filter(Boolean).slice(0, 20);
 }
+
 function tagsToString(tags){
   return (tags || []).join(", ");
 }
@@ -99,7 +112,6 @@ function allowedType(file){
 }
 
 function fileTooLarge(file){
-  // demo limit: 25MB
   return file.size > 25 * 1024 * 1024;
 }
 
@@ -118,6 +130,8 @@ function mountNav(active){
   const el = document.getElementById("appNav");
   if(!el) return;
 
+  const userLabel = user ? user.username : "Guest";
+
   el.innerHTML = `
     <div class="container">
       <div class="nav">
@@ -133,8 +147,12 @@ function mountNav(active){
         </div>
         <div class="spacer"></div>
         <div class="userpill">
-          <span class="pill">User: <b>${escapeHtml(user.username)}</b></span>
-          <button class="pill danger" id="btnSignOut" type="button">Sign out</button>
+          <span class="pill">User: <b>${escapeHtml(userLabel)}</b></span>
+          ${
+            user
+              ? `<button class="pill danger" id="btnSignOut" type="button">Sign out</button>`
+              : `<a class="pill" href="profile.html">Login</a>`
+          }
         </div>
       </div>
     </div>
@@ -142,7 +160,10 @@ function mountNav(active){
 
   const btn = document.getElementById("btnSignOut");
   if(btn){
-    btn.onclick = () => { signOut(); location.href = "profile.html"; };
+    btn.onclick = () => {
+      signOut();
+      location.href = "profile.html";
+    };
   }
 }
 
@@ -230,16 +251,19 @@ function paginate(list, page, pageSize){
 function applyFilters(list, filters){
   let out = [...list];
 
-  // visibility on home: show public + user’s private (if any)
-  const user = getUser().username;
-  out = out.filter(x => x.visibility !== "Private" || x.owner === user);
+  const user = getUser();
+  const username = user ? user.username : null;
+
+  out = out.filter(x => x.visibility !== "Private" || x.owner === username);
 
   if(filters.onlyMine){
-    out = out.filter(x => x.owner === user);
+    out = username ? out.filter(x => x.owner === username) : [];
   }
+
   if(filters.type && filters.type !== "all"){
     out = out.filter(x => x.type === filters.type);
   }
+
   if(filters.q){
     const q = filters.q.toLowerCase();
     out = out.filter(x =>
@@ -249,50 +273,66 @@ function applyFilters(list, filters){
       (x.tags||[]).some(t => t.toLowerCase().includes(q))
     );
   }
+
   if(filters.tag){
     const t = filters.tag.toLowerCase();
     out = out.filter(x => (x.tags||[]).some(z => z.toLowerCase() === t));
   }
 
-  // sort
   if(filters.sort === "oldest"){
     out.sort((a,b) => (a.uploadDate||"").localeCompare(b.uploadDate||""));
   } else if(filters.sort === "views"){
     out.sort((a,b) => (b.views||0) - (a.views||0));
   } else {
-    // newest
     out.sort((a,b) => (b.uploadDate||"").localeCompare(a.uploadDate||""));
   }
 
   return out;
 }
 
-// ======= Page initializers =======
-window.MS = {
-  mountNav,
-  loadMedia,
-  saveMedia,
-  getUser,
-  setUser,
-  signOut,
-  findById,
-  updateById,
-  deleteById,
-  parseTags,
-  tagsToString,
-  allowedType,
-  fileTooLarge,
-  fileToDataUrl,
-  renderSkeletonGrid,
-  renderItemCard,
-  getQueryParam,
-  paginate,
-  applyFilters,
-  niceDate,
-  escapeHtml
-};
-
+// ======= API helpers =======
 const API_BASE = "http://localhost:3000";
+
+async function apiRegister(username, email, password) {
+  const res = await fetch(`${API_BASE}/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      id: crypto.randomUUID(),
+      username,
+      email,
+      password
+    })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Registration failed");
+  }
+
+  return data;
+}
+
+async function apiLogin(email, password) {
+  const res = await fetch(`${API_BASE}/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ email, password })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || "Login failed");
+  }
+
+  return data;
+}
 
 async function apiGetMedia() {
   const res = await fetch(`${API_BASE}/media`);
@@ -340,3 +380,28 @@ async function apiDeleteMedia(id) {
   if (!res.ok) throw new Error("Failed to delete media");
   return await res.json();
 }
+
+// ======= Page initializers =======
+window.MS = {
+  mountNav,
+  loadMedia,
+  saveMedia,
+  getUser,
+  setUser,
+  signOut,
+  findById,
+  updateById,
+  deleteById,
+  parseTags,
+  tagsToString,
+  allowedType,
+  fileTooLarge,
+  fileToDataUrl,
+  renderSkeletonGrid,
+  renderItemCard,
+  getQueryParam,
+  paginate,
+  applyFilters,
+  niceDate,
+  escapeHtml
+};
